@@ -2,7 +2,8 @@
 import subprocess
 
 def dangerous_command(user_input):
-    # Injection possible si user_input n'est pas filtré
+    # Exemple vulnérable : injection possible
     subprocess.call(f"echo {user_input}", shell=True)
 
-dangerous_command("test; rm -rf /tmp")  # Exemple vulnérable
+if __name__ == "__main__":
+    dangerous_command("test; rm -rf /tmp")  # Simule une vulnérabilité
