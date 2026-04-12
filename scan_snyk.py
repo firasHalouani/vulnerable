@@ -1,15 +1,13 @@
 # scan_snyk.py
 import requests
 import json
+import os
 
-# 1️⃣ Ton API Token Snyk (obtenu sur https://snyk.io/account)
-API_TOKEN = "snyk_uat.1fcad39e.eyJlIjoxNzgzMzQzNjk0LCJoIjoic255ay5pbyIsImoiOiJBWjFvRmQtRWJiVnNucVJSTVM2Skx3IiwicyI6IndIazF4TWpfUUsyYXV1cjZweEJybmciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.3sheIAqnvjtftnpac2f83mDeQq6ChIuD5O4KNotxvEluJNziTNtYJGSRv04WCdpyVfVX_Tp_rlOExNWmh4DEBg"
+# ❗ NEVER hardcode tokens
+API_TOKEN = os.getenv("SNYK_TOKEN")
 
-# 2️⃣ Le repo GitHub que tu veux scanner
-# Format : "owner/repo"
-REPO = ""
+REPO = "owner/repo"
 
-# 3️⃣ URL API Snyk pour scanner un repo GitHub
 url = f"https://snyk.io/api/v1/org/github/repos/{REPO}/test"
 
 headers = {
@@ -18,16 +16,53 @@ headers = {
     "Accept": "application/vnd.snyk+json"
 }
 
-def scan_repo():
+def scan_snyk():
     response = requests.post(url, headers=headers)
+
     if response.status_code == 200:
-        data = response.json()
-        # Retour JSON joliment formaté
-        print(json.dumps(data, indent=4))
-        return data
+        return response.json()
     else:
-        print("Erreur API:", response.status_code, response.text)
-        return None
+        return {"error": response.text}
+
+
+# 2️⃣ NEW: Mock vulnerability scanner (for testing pipeline)
+def scan_custom_rules():
+    vulnerabilities = []
+
+    # Example rule 1
+    vulnerabilities.append({
+        "source": "custom-rule-engine",
+        "severity": "HIGH",
+        "title": "Hardcoded secret detected",
+        "file": "config.py",
+        "description": "API keys should not be hardcoded in source code"
+    })
+
+    # Example rule 2
+    vulnerabilities.append({
+        "source": "custom-rule-engine",
+        "severity": "MEDIUM",
+        "title": "Debug mode enabled",
+        "file": "settings.py",
+        "description": "DEBUG=True should not be used in production"
+    })
+
+    return {"custom_vulnerabilities": vulnerabilities}
+
+
+def scan_repo():
+    snyk_results = scan_snyk()
+    custom_results = scan_custom_rules()
+
+    final_report = {
+        "repo": REPO,
+        "snyk": snyk_results,
+        "custom_scan": custom_results
+    }
+
+    print(json.dumps(final_report, indent=4))
+    return final_report
+
 
 if __name__ == "__main__":
     scan_repo()
