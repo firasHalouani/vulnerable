@@ -2,10 +2,9 @@
 import requests
 import json
 import os
+import subprocess
 
-# ❗ NEVER hardcode tokens
 API_TOKEN = os.getenv("SNYK_TOKEN")
-
 REPO = "owner/repo"
 
 url = f"https://snyk.io/api/v1/org/github/repos/{REPO}/test"
@@ -16,103 +15,63 @@ headers = {
     "Accept": "application/vnd.snyk+json"
 }
 
+
 def scan_snyk():
     response = requests.post(url, headers=headers)
 
     if response.status_code == 200:
         return response.json()
-    else:
-        return {"error": response.text}
+    return {"error": response.text}
 
 
-# 2️⃣ Custom vulnerability scanner (mock SAST rules)
-def scan_custom_rules():
-    vulnerabilities = []
+# ✅ REAL BANDIT SCANNER
+def scan_bandit(path="."):
+    """
+    Run Bandit and return vulnerabilities as JSON
+    """
 
-    vulnerabilities.extend([
-        {
-            "source": "custom-rule-engine",
-            "severity": "HIGH",
-            "title": "Hardcoded secret detected",
-            "file": "config.py",
-            "description": "API keys should never be hardcoded"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "MEDIUM",
-            "title": "Debug mode enabled",
-            "file": "settings.py",
-            "description": "DEBUG=True should not be used in production"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "HIGH",
-            "title": "SQL Injection risk",
-            "file": "db.py",
-            "description": "User input used directly in SQL query"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "CRITICAL",
-            "title": "Unsafe deserialization",
-            "file": "parser.py",
-            "description": "Using pickle.loads on untrusted input"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "HIGH",
-            "title": "Weak password policy",
-            "file": "auth.py",
-            "description": "Passwords not enforcing minimum complexity"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "MEDIUM",
-            "title": "Missing input validation",
-            "file": "api.py",
-            "description": "User input not validated before processing"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "HIGH",
-            "title": "Insecure HTTP usage",
-            "file": "requests_client.py",
-            "description": "HTTP used instead of HTTPS for external calls"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "MEDIUM",
-            "title": "Exposed error messages",
-            "file": "app.py",
-            "description": "Stack traces returned to end users"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "LOW",
-            "title": "Outdated dependency usage",
-            "file": "requirements.txt",
-            "description": "Old version of Flask detected"
-        },
-        {
-            "source": "custom-rule-engine",
-            "severity": "CRITICAL",
-            "title": "Broken authentication",
-            "file": "login.py",
-            "description": "Session tokens not properly validated"
-        }
-    ])
+    try:
+        result = subprocess.run(
+            ["bandit", "-r", path, "-f", "json"],
+            capture_output=True,
+            text=True
+        )
 
-    return {"custom_vulnerabilities": vulnerabilities}
+        if result.returncode not in [0, 1]:  
+            # 0 = clean, 1 = issues found
+            return {"error": result.stderr}
+
+        data = json.loads(result.stdout)
+
+        vulnerabilities = []
+
+        for issue in data.get("results", []):
+            vulnerabilities.append({
+                "source": "bandit",
+                "severity": issue.get("issue_severity"),
+                "confidence": issue.get("issue_confidence"),
+                "title": issue.get("test_name"),
+                "file": issue.get("filename"),
+                "line": issue.get("line_number"),
+                "description": issue.get("issue_text")
+            })
+
+        return {"bandit_vulnerabilities": vulnerabilities}
+
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def scan_repo():
     snyk_results = scan_snyk()
-    custom_results = scan_custom_rules()
+
+    # 👇 scan current project folder
+    bandit_results = scan_bandit(".")
 
     final_report = {
         "repo": REPO,
         "snyk": snyk_results,
-        "custom_scan": custom_results
+        "bandit": bandit_results
     }
 
     print(json.dumps(final_report, indent=4))
