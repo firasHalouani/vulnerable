@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: django_app
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+
+  nuclei:
+    image: projectdiscovery/nuclei:latest
+    container_name: nuclei_scan
+    depends_on:
+      - web
+    networks:
+      - app-network
+    entrypoint: >
+      sh -c "
+      sleep 10 &&
+      nuclei -u http://web:8000 -json -o /output/nuclei.json
+      "
+    volumes:
+      - ./output:/output
+
+  zap:
+    image: owasp/zap2docker-stable
+    container_name: zap_scan
+    depends_on:
+      - web
+    networks:
+      - app-network
+    entrypoint: >
+      sh -c "
+      sleep 15 &&
+      zap-baseline.py -t http://web:8000 -J /output/zap.json
+      "
+    volumes:
+      - ./output:/output
+
+networks:
+  app-network:
