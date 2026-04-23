@@ -1,0 +1,36 @@
+name: VulOps Security Scan
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run Bandit
+      run: |
+        pip install bandit
+        bandit -r . -f json -o bandit_results.json || true
+
+    - name: Run Semgrep
+      run: |
+        python3 -m pip install semgrep
+        semgrep --config auto --json > semgrep_results.json
+
+    - name: Run Trivy
+      run: |
+        wget https://github.com/aquasecurity/trivy/releases/download/v0.43.1/trivy_0.43.1_Linux-64bit.deb
+        sudo dpkg -i trivy_0.43.1_Linux-64bit.deb
+        trivy fs --format json --output trivy_results.json .
+
+    - name: Upload Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-results
+        path: '*.json'
